@@ -1,4 +1,32 @@
 
+# TODOs:
+
+- [ ]Actual presentation slides
+
+- [x] VPC Example
+	- [x] NAT Gateways
+	- [x] Internet Gateways
+	- [x] Tested by launching EC2 instances and SSH'ing
+
+- [ ] Lambda Example (the "hipster" stack)
+  - [ ] Deploy into the existing VPC
+	- [ ] Quick Python app
+	- [ ] CF Template with Lambda, API Gateway, CW Logs
+	- [ ] Compare to Serverless / Gordon
+	- [ ] IAM Role for access to Dynamo
+
+- [ ] EC2 Example (the "startup" stack)
+  - [ ] Deploy AMI to ASG with the two private subnets
+	- [ ] ELB, Health Check
+	- [ ] Route53 + SSL Certificate
+
+- [ ] ECS Example (the "cloud native" stack)
+  - [ ] Deploy the ECS Optimised image in a ASG
+	- [ ] Create a task from a Docker image
+	- [ ] ALB to send traffic to the image
+	- [ ] Instance vs. Task Role
+
+
 Introduction to Infrastructure
 
 - What you'll do:
@@ -79,7 +107,7 @@ Before you start:
 - Does that sound annoying? Yep, it sure does! Let's step through the creation of one with Cloudformation
 
 ```
-multi-az-vpc.yaml
+lambda-demo/0001-multi-az-vpc.yaml
 ```
 
 
