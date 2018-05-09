@@ -216,3 +216,18 @@ Resources:
         - ContainerName: "docker-task"
           ContainerPort: 5000
           TargetGroupArn: !Ref LoadBalancerTargetGroup
+
+
+Outputs:
+
+  EcrLoadBalancerHostedZoneId:
+    Description: "Hosted Zone Id for ALB"
+    Value: !GetAtt LoadBalancer.CanonicalHostedZoneID
+    Export:
+      Name: !Sub ${AWS::StackName}::LoadBalancerHostedZoneId
+
+  EcrLoadBalancerDNSName:
+    Description: "Hosted Zone Id for ALB"
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}::LoadBalancerDNSName

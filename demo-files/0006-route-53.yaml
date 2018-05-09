@@ -1,0 +1,39 @@
+---
+
+Parameters:
+
+  EcsStackName:
+    Description: The name of your ECS stack
+    Type: String
+    Default: tw-demo-ecs
+
+  HostedZoneId:
+    Description: "The HostedZoneId of the domain you'd like to create a subdomain for"
+    Type: String
+
+  Domain:
+    Description: "The full domain you'd like to use"
+    Type: String
+
+
+Resources:
+
+  LoadBalancerUrl:
+    Type: "AWS::Route53::RecordSet"
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Comment: !Sub "Zone alias targeted to ${EcsStackName} LoadBalancer"
+      Name: !Ref Domain
+      Type: "A"
+      AliasTarget:
+        HostedZoneId:
+          Fn::ImportValue: !Sub "${EcsStackName}::LoadBalancerHostedZoneId"
+        DNSName:
+          Fn::ImportValue: !Sub "${EcsStackName}::LoadBalancerDNSName"
+
+Outputs:
+
+  LoadBalancerUrl:
+    Value: !Ref LoadBalancerUrl
+    Export:
+      Name: !Sub ${AWS::StackName}::LoadBalancerUrl
