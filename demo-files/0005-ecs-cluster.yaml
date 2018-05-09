@@ -1,0 +1,218 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+
+  VpcStackName:
+    Description: The name of your VPC stack
+    Type: String
+    Default: tw-demo-vpc
+
+  EcrStackName:
+    Description: The name of your ECR stack
+    Type: String
+    Default: tw-demo-ecr
+
+  KeyName:
+    Description: The name of a PEM file that is available
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: "brntn-sydney"
+
+  ServiceName:
+    Description: The name of your service
+    Type: String
+    Default: testServiceName
+
+  ClusterName:
+    Description: The name of your ECS cluster
+    Type: String
+    Default: demo-cluster
+
+
+Resources:
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: "ec2-ecs-instance-role"
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ['ecs:CreateCluster', 'ecs:DeregisterContainerInstance', 'ecs:DiscoverPollEndpoint',
+                         'ecs:Poll', 'ecs:RegisterContainerInstance', 'ecs:StartTelemetrySession',
+                         'ecs:Submit*', 'logs:CreateLogStream', 'logs:PutLogEvents', 'ecr:BatchGetImage',
+                         'ecr:GetAuthorizationToken', 'ecr:BatchCheckLayerAvailability', 'ecr:GetDownloadUrlForLayer',
+                         "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+                Resource: '*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: "ecs-service-role"
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ['elasticloadbalancing:DeregisterInstancesFromLoadBalancer', 'elasticloadbalancing:DeregisterTargets',
+                         'elasticloadbalancing:Describe*', 'elasticloadbalancing:RegisterInstancesWithLoadBalancer',
+                         'elasticloadbalancing:RegisterTargets', 'ec2:Describe*', 'ec2:AuthorizeSecurityGroupIngress']
+                Resource: '*'
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref ClusterName
+
+  LoadBalancerSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: !Ref "AWS::StackName"
+      GroupDescription: "ECS Cluster ALB Group"
+      VpcId:
+        Fn::ImportValue: !Sub "${VpcStackName}::VPC"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+
+  ClusterInstanceSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: !Ref "AWS::StackName"
+      GroupDescription: "ECS Instance Security Group"
+      VpcId:
+        Fn::ImportValue: !Sub "${VpcStackName}::VPC"
+      SecurityGroupIngress:
+        - IpProtocol: "tcp"
+          FromPort: "22"
+          ToPort: "22"
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: "80"
+          ToPort: "80"
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 31000
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+
+  ClusterLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      KeyName: !Ref KeyName
+      ImageId: ami-efda148d
+      SecurityGroups:
+        - !Ref ClusterInstanceSecurityGroup
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum update -y aws-cfn-bootstrap
+
+          echo ECS_CLUSTER=${EcsCluster} >> /etc/ecs/ecs.config
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ClusterAutoScalingGroup --region ${AWS::Region}
+
+  ClusterAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      LaunchConfigurationName: !Ref ClusterLaunchConfiguration
+      MinSize: 2
+      MaxSize: 2
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${VpcStackName}::PrivateSubnetA"
+        - Fn::ImportValue: !Sub "${VpcStackName}::PrivateSubnetB"
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref AWS::StackName
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - Fn::ImportValue: !Sub "${VpcStackName}::PublicSubnetA"
+        - Fn::ImportValue: !Sub "${VpcStackName}::PublicSubnetB"
+
+  HttpListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - TargetGroupArn: !Ref LoadBalancerTargetGroup
+          Type: forward
+
+  LoadBalancerTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn: LoadBalancer
+    Properties:
+      Tags:
+        - Key: "Name"
+          Value: !Ref "AWS::StackName"
+      Port: 5000
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub "${VpcStackName}::VPC"
+
+  DockerTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      Family: "docker-task"
+      ContainerDefinitions:
+        - Name: "docker-task"
+          Image:
+            !Join
+              - ":"
+              - - Fn::ImportValue: !Sub "${EcrStackName}::DockerRepositoryUrl"
+                - "latest"
+          Memory: 256
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 5000
+          Essential: true
+
+  Service:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - ClusterAutoScalingGroup
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref EcsCluster
+      DesiredCount: 2
+      TaskDefinition: !Ref DockerTaskDefinition
+
+      Role: !Ref TaskRole
+      LoadBalancers:
+        - ContainerName: "docker-task"
+          ContainerPort: 5000
+          TargetGroupArn: !Ref LoadBalancerTargetGroup

@@ -18,7 +18,6 @@ an introduction to infrastructure
 - Anyone on the team can deploy
 - Our code goes to production automatically
 
-
 ---
 
 ## Things you need
@@ -28,14 +27,14 @@ an introduction to infrastructure
 - You should have Docker installed on your machine
 - If you add a domain name to your AWS account (it's in Route 53) you'll get to play with a couple of extra things
 
-
 ---
 
 ## Cloudformation
 
 ![cloudformation](/img/how-cloudformation-works.png)
 
-----
+---
+
 
 ### Why use cloudformation?
 
@@ -44,22 +43,25 @@ an introduction to infrastructure
 - a "blueprint" of your infrastructure as code
 - can deploy newest services that Amazon supports
 
-----
+---
+
 
 ### So why are there all the other options?
+
 - They try to be "cloud agnostic"
 
-----
+---
 
 ### Some alternatives
+
 - Troposphere, Terraform, Sceptre
 - FaaS specific: Serverless, Gordon, Zappa, Chalice
 
-----
+---
 
 ### template example using yaml
 
-```
+```yaml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: A sample template
 
@@ -80,11 +82,13 @@ Resources:
             VolumeSize: 20
 ```
 
-----
+---
+
 ### So how do we deploy this?
 
 using AWS CLI
-```
+
+```bash
 aws cloudformation create-stack \
   --stack-name teststack \
   --template-body "file://your/file/path/template.yml"
@@ -102,7 +106,8 @@ aws cloudformation create-stack \
 
 ## Lambda example (the "hipster" stack)
 
-----
+---
+
 
 ### Lambda example sub slide
 
@@ -118,13 +123,14 @@ aws cloudformation create-stack \
 
 ## EC2 example (the "startup" stack)
 
-----
+---
+
 
 ### EC2 example sub slide
 
 ---
 
-## What you'll do
+## Serveless Deployment
 
 - Deploy a serverless application to AWS Lambda
 - Deploy a high availability and scalable application cluster to AWS EC2
@@ -134,7 +140,6 @@ aws cloudformation create-stack \
 
 ## ECS Example (the "cloud native" stack)
 
-----
+---
 
 ### ECS Example sub slide
-

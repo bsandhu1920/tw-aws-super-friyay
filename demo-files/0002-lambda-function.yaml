@@ -1,0 +1,125 @@
+---
+
+Parameters:
+
+  LambdaFunctionName:
+    Description: URL friendly name for your lambda function
+    Type: String
+    Default: "IpAddressFunction"
+
+  VpcStackName:
+    Description: The name of your VPC stack
+    Type: String
+    Default: tw-demo-stack
+
+  Environment:
+    Description: URL friendly environment name
+    Type: String
+    Default: dev
+
+Resources:
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for Lambda Function
+      VpcId:
+        Fn::ImportValue: !Sub "${VpcStackName}::VPC"
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName} Lambda Security Group
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub "lambda-CreateLogs-${LambdaFunctionName}"
+          PolicyDocument:
+            Statement:
+              - Effect: "Allow"
+                Action: [
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:GetLogEvents",
+                  "logs:PutLogEvents"
+                ]
+                Resource: "arn:aws:logs:*:*:*"
+
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref LambdaFunctionName
+      Role: !GetAtt LambdaRole.Arn
+      Handler: index.handler
+      Runtime: python3.6
+      Code:
+        ZipFile: |
+          import json
+
+          def handler(event, context):
+              return json.dumps({"event":event})
+
+  LambdaPermissionApiGateway:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref LambdaFunction
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LambdaRestApi}/*/*"
+
+  LambdaRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "${LambdaFunctionName}-${Environment}"
+
+  LambdaProxy:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt LambdaRestApi.RootResourceId
+      PathPart: 'ip'
+      RestApiId: !Ref LambdaRestApi
+
+  ApiGatewayGET:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: ANY
+      MethodResponses: []
+      RequestParameters: {}
+      RestApiId: !Ref LambdaRestApi
+      ResourceId: !Ref LambdaProxy
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Arn}/invocations
+          - Arn:
+              Fn::GetAtt:
+              - LambdaFunction
+              - Arn
+
+  ApiGatewayDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    DependsOn: ApiGatewayGET
+    Properties:
+      RestApiId: !Ref LambdaRestApi
+      StageName: !Ref Environment
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunctionName}"
+
+Outputs:
+
+  ApiURL:
+    Description: URL for our Lambda function
+    Value: !Sub "https://${LambdaRestApi}.execute-api.ap-southeast-2.amazonaws.com/${Environment}"
