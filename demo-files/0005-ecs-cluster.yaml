@@ -1,4 +1,7 @@
+---
+
 AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploy a cluster of ECS instances and a docker task"
 
 Parameters:
 
