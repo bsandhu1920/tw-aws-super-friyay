@@ -296,3 +296,157 @@ PrivateSubnetB:
       - Key: Name
         Value: !Sub ${AWS::StackName} Private Subnet B
 ```
+
+---
+
+## Gateway IP Addresses
+
+```yaml
+NatGatewayEIPA:
+  Type: AWS::EC2::EIP
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    Domain: vpc
+
+NatGatewayEIPB:
+  Type: AWS::EC2::EIP
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    Domain: vpc
+```
+
+---
+
+## NAT Gateways
+
+```yaml
+NatGatewayA:
+  Type: AWS::EC2::NatGateway
+  Properties:
+    AllocationId: !GetAtt NatGatewayEIPA.AllocationId
+    SubnetId: !Ref PublicSubnetA
+
+NatGatewayB:
+  Type: AWS::EC2::NatGateway
+  Properties:
+    AllocationId: !GetAtt NatGatewayEIPB.AllocationId
+    SubnetId: !Ref PublicSubnetB
+```
+
+---
+
+## Public Routes
+
+```yaml
+PublicRouteTable:
+  Type: AWS::EC2::RouteTable
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Public Route table
+
+DefaultPublicRoute:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    DestinationCidrBlock: 0.0.0.0/0
+    GatewayId: !Ref InternetGateway
+
+PublicSubnetARouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    SubnetId: !Ref PublicSubnetA
+
+PublicSubnetBRouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    SubnetId: !Ref PublicSubnetB
+```
+
+## Private Routes
+
+```yaml
+PrivateRouteTableA:
+  Type: AWS::EC2::RouteTable
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Private Route Table A
+
+DefaultPrivateRouteA:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableA
+    DestinationCidrBlock: 0.0.0.0/0
+    NatGatewayId: !Ref NatGatewayA
+
+PrivateSubnetARouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableA
+    SubnetId: !Ref PrivateSubnetA
+
+PrivateRouteTableB:
+  Type: AWS::EC2::RouteTable
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Private Route Table B
+
+DefaultPrivateRouteB:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableB
+    DestinationCidrBlock: 0.0.0.0/0
+    NatGatewayId: !Ref NatGatewayB
+
+PrivateSubnetBRouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableB
+    SubnetId: !Ref PrivateSubnetB
+```
+
+## Outputs
+
+```yaml
+Outputs:
+
+  VPC:
+    Description: VPC for the Stack
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}::VPC
+
+  PublicSubnetA:
+    Description: Public Subnet A
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}::PublicSubnetA
+
+  PrivateSubnetA:
+    Description: Private Subnet A
+    Value: !Ref PrivateSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}::PrivateSubnetA
+
+  PublicSubnetB:
+    Description: Public Subnet B
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}::PublicSubnetB
+
+  PrivateSubnetB:
+    Description: Private Subnet B
+    Value: !Ref PrivateSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}::PrivateSubnetB
+```
