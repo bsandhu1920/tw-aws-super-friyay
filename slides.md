@@ -12,6 +12,15 @@ an introduction to infrastructure
 
 ---
 
+## Why it's important
+
+- Deploying to production is a core task of any application development team
+- Anyone on the team can deploy
+- Our code goes to production automatically
+
+
+---
+
 ## Things you need
 
 - You should have an AWS account
@@ -80,4 +89,52 @@ aws cloudformation create-stack \
   --stack-name teststack \
   --template-body "file://your/file/path/template.yml"
 ```
+
+---
+
+## What you'll do
+
+- <span style="color:blue">Deploy a serverless application to AWS Lambda</span>
+- Deploy a high availability and scalable application cluster to AWS EC2
+- Deploy a group of Docker containers with Amazon ECS
+
+---
+
+## Lambda example (the "hipster" stack)
+
+----
+
+### Lambda example sub slide
+
+---
+
+## What you'll do
+
+- Deploy a serverless application to AWS Lambda
+- <span style="color:blue">Deploy a high availability and scalable application cluster to AWS EC2</span>
+- Deploy a group of Docker containers with Amazon ECS
+
+---
+
+## EC2 example (the "startup" stack)
+
+----
+
+### EC2 example sub slide
+
+---
+
+## What you'll do
+
+- Deploy a serverless application to AWS Lambda
+- Deploy a high availability and scalable application cluster to AWS EC2
+- <span style="color:blue">Deploy a group of Docker containers with Amazon ECS</span>
+
+---
+
+## ECS Example (the "cloud native" stack)
+
+----
+
+### ECS Example sub slide
 
