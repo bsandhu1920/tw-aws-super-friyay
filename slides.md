@@ -28,7 +28,27 @@ an introduction to infrastructure
 
 ----
 
-#### template example using yaml
+### Why use cloudformation?
+
+- AWS default!
+- no need for a "real" programming language
+- a "blueprint" of your infrastructure as code
+- can deploy newest services that Amazon supports
+
+----
+
+### So why are there all the other options?
+- They try to be "cloud agnostic"
+
+----
+
+### Some alternatives
+- Troposphere, Terraform, Sceptre
+- FaaS specific: Serverless, Gordon, Zappa, Chalice
+
+----
+
+### template example using yaml
 
 ```
 AWSTemplateFormatVersion: "2010-09-09"
@@ -52,21 +72,12 @@ Resources:
 ```
 
 ----
+### So how do we deploy this?
 
-#### Why use cloudformation?
+using AWS CLI
+```
+aws cloudformation create-stack \
+  --stack-name teststack \
+  --template-body "file://your/file/path/template.yml"
+```
 
-- AWS default!
-- no need for a "real" programming language
-- a "blueprint" of your infrastructure as code
-- can deploy newest services that Amazon supports
-
-----
-
-#### So why are there all the other options?
-- They try to be "cloud agnostic"
-
-----
-
-#### Some alternatives
-- Troposphere, Terraform, Sceptre
-- FaaS specific: Serverless, Gordon, Zappa, Chalice
