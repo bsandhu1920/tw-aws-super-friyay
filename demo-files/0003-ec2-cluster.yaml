@@ -10,15 +10,9 @@ Parameters:
     Type: String
     Default: tw-demo-vpc
 
-  Environment:
-    Description: URL friendly environment name
-    Type: String
-    Default: dev
-
   KeyName:
     Description: The name of a PEM file that is available
     Type: AWS::EC2::KeyPair::KeyName
-    Default: "brntn-sydney"
 
 Resources:
 

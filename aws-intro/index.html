@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0' />
+  <title>big</title>
+  <link href='big.css' rel='stylesheet' type='text/css' />
+  <link href='highlight.css' rel='stylesheet' type='text/css' />
+  <style>
+    .new-shiny { background: #aaaaaa; }
+  </style>
+  <script src='big.js'></script>
+  <script src='highlight.js'></script>
+  <script>hljs.initHighlightingOnLoad();</script>
+</head>
+<body class='light'>
+  <div><h1 id="aws-super-friyaaay">AWS Super Friyaaay</h1>
+<p>with <em>Kylie Sy</em> and <em>Brenton Cleeland</em></p>
+</div>
+<div><p>An intro to infrastructure on AWS</p>
+</div>
+<div><h2 id="what-we-ll-do-today">What we&#39;ll do today</h2>
+<ul>
+<li>Basics of Cloud Formation</li>
+<li>Create a VPC</li>
+<li>Deploy a group of EC2 instances</li>
+<li>Deploy a Docker container to an ECS Cluster</li>
+</ul>
+</div>
+<div><p>Why you should learn this stuff</p>
+</div>
+<div><p>Deploying to production is a core task of any application development team</p>
+</div>
+<div><p>Anyone on your team should be able to deploy new infrastructure</p>
+</div>
+<div><p>You should understand the underlying infrastructure</p>
+</div>
+<div><h2 id="what-you-need">What you need</h2>
+<ul>
+<li>An AWS account</li>
+<li>The <code>awscli</code> installed</li>
+<li><code>docker</code> installed</li>
+<li>(optional) a domain name in Route 53</li>
+</ul>
+</div>
+<div><p>Head to the AWS Console and set up an <em>IAM role</em> for deploying</p>
+<notes>
+<a href="https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html">https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html</a>
+</notes>
+
+</div>
+<div><p>Create a <em>keypair</em> while you&#39;re there too</p>
+</div>
+<div><h2 id="configure-awscli">Configure <code>awscli</code></h2>
+<pre><code class="lang-bash">&gt; awscli configure
+</code></pre>
+</div>
+<div><p>Cloudformation</p>
+</div>
+<div><p>It&#39;s the AWS default</p>
+</div>
+<div><p>It&#39;s not <em>that</em> bad</p>
+</div>
+<div><pre><code class="yaml">
+AWSTemplateFormatVersion: &quot;2010-09-09&quot;
+Description: &quot;A token description of your stack&quot;
+
+Parameters:
+  # Parameters that can be configured when creating the stack
+
+Resources:
+  # Resources that will be created as part of the deployment
+
+Outputs:
+  # Values that are output (and exported) when complete
+</code></pre>
+</div>
+<div><p>There are a bunch of Cloudformation &quot;functions&quot;</p>
+</div>
+<div><p><em>!Sub</em> allows you do do string substitution:</p>
+</div>
+<div><p><em>!Ref</em> lets you refer to other resources and parameters:</p>
+</div>
+<div><p><em>!Select</em> grabs items from lists, and <em>!GetAZs</em> lists Availability Zones.</p>
+</div>
+<div><p><em>!GetAtt</em> accesses attributes of resources</p>
+</div>
+<div><p><em>!ImportValue</em> imports values from other templates</p>
+</div>
+<div><p>AWS populates some parameters that you can use:</p>
+<ul>
+<li>AWS::StackName</li>
+<li>AWS::Region</li>
+<li>AWS::AccountsId</li>
+</ul>
+</div>
+<div><p>Parameters</p>
+</div>
+<div><pre><code class="yaml">RepositoryName:
+  Type: String
+  AllowedPattern: &quot;[a-z0-9]+&quot;
+  Description: The name of your repository
+  Default: demo
+</code></pre>
+</div>
+<div><p>Resources</p>
+</div>
+<div><pre><code class="yaml">
+PublicSubnetA:
+  Type: AWS::EC2::Subnet
+  Properties:
+    VpcId: !Ref VPC
+    AvailabilityZone: !Select [0, !GetAZs &#39;&#39;]
+    CidrBlock: !Sub &#39;${CIDRPrefix}.10.0/24&#39;
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Public Subnet A
+</code></pre>
+</div>
+<div><p>Outputs</p>
+</div>
+<div><pre><code class="yaml">VPC:
+  Description: VPC for the Stack
+  Value: !Ref VPC
+  Export:
+    Name: !Sub ${AWS::StackName}::VPC
+</code></pre>
+</div>
+<div><p>Alternatives to Cloudformation</p>
+</div>
+<div><p>Why does everyone hate Cloudformation?</p>
+</div>
+<div><p>Troposphere, Terraform, Sceptre, <em>Serverless</em>, Gordon, Zappa, Chalice</p>
+</div>
+<div><p>Your first VPC</p>
+</div>
+<div><p>Let&#39;s make a <em>multi-AZ</em> network, with <em>public and private</em> subnets.</p>
+</div>
+<div><p>Your VPC will contain:</p>
+<ul>
+<li>An Internet Gateway</li>
+<li>2x Public Subnets</li>
+<li>2x Private Subnets</li>
+<li>NAT Gateways</li>
+<li>A public Route Table</li>
+<li>Private Route Tables</li>
+<li>Routes for accessing the internet</li>
+</ul>
+</div>
+<div><p>Woah!</p>
+</div>
+<div><p><img src="https://s3-ap-southeast-2.amazonaws.com/brntn-screenshots/base-vpc.jpg" alt=""></p>
+</div>
+<div><p>Cool! 😎</p>
+</div>
+<div><pre><code class="yaml">AWSTemplateFormatVersion: &quot;2010-09-09&quot;
+Description: &quot;Create a multi-az VPC&quot;
+
+Parameters:
+
+  CIDRPrefix:
+    Description: &quot;Prefix for a /16 VPC e.g. 10.10&quot;
+    Type: String
+    Default: &#39;10.10&#39;
+</code></pre>
+</div>
+<div><p>Your <em>VPC</em> is your own Virtual Private Cloud where you can deploy other services</p>
+</div>
+<div><pre><code class="yaml">VPC:
+  Type: AWS::EC2::VPC
+  Properties:
+    CidrBlock: !Sub &#39;${CIDRPrefix}.0.0/16&#39;
+    Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+</code></pre>
+</div>
+<div><p>The <em>Internet Gateway</em> gives your VPC a path to the Internet</p>
+</div>
+<div><pre><code class="yaml">InternetGateway:
+  Type: AWS::EC2::InternetGateway
+  Properties:
+    Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+InternetGatewayAttachment:
+  Type: AWS::EC2::VPCGatewayAttachment
+  Properties:
+    VpcId: !Ref VPC
+    InternetGatewayId: !Ref InternetGateway
+</code></pre>
+</div>
+<div><p><em>Subnets</em> are logical network subdivisions</p>
+</div>
+<div><pre><code class="yaml">PublicSubnetA:
+  Type: AWS::EC2::Subnet
+  Properties:
+    VpcId: !Ref VPC
+    AvailabilityZone: !Select [0, !GetAZs &#39;&#39;]
+    CidrBlock: !Sub &#39;${CIDRPrefix}.10.0/24&#39;
+    MapPublicIpOnLaunch: true
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Public Subnet A
+
+PublicSubnetB:
+  Type: AWS::EC2::Subnet
+  Properties:
+    VpcId: !Ref VPC
+    AvailabilityZone: !Select [1, !GetAZs &#39;&#39;]
+    CidrBlock: !Sub &#39;${CIDRPrefix}.20.0/24&#39;
+    MapPublicIpOnLaunch: true
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Public Subnet B
+</code></pre>
+</div>
+<div><pre><code class="yaml">PrivateSubnetA:
+  Type: AWS::EC2::Subnet
+  Properties:
+    VpcId: !Ref VPC
+    AvailabilityZone: !Select [0, !GetAZs &#39;&#39;]
+    CidrBlock: !Sub &#39;${CIDRPrefix}.11.0/24&#39;
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Private Subnet A
+
+PrivateSubnetB:
+  Type: AWS::EC2::Subnet
+  Properties:
+    VpcId: !Ref VPC
+    AvailabilityZone: !Select [1, !GetAZs &#39;&#39;]
+    CidrBlock: !Sub &#39;${CIDRPrefix}.21.0/24&#39;
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Private Subnet B
+</code></pre>
+</div>
+<div><p><em>Elastic IP Addresses</em> are just IP addresses reserved for your use</p>
+</div>
+<div><pre><code class="yaml">NatGatewayEIPA:
+  Type: AWS::EC2::EIP
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    Domain: vpc
+
+NatGatewayEIPB:
+  Type: AWS::EC2::EIP
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    Domain: vpc
+</code></pre>
+</div>
+<div><p>Our <em>NAT Gateways</em> allow our private subnets to access the Internet, but stops the Internet from accessing them</p>
+</div>
+<div><pre><code class="yaml">NatGatewayA:
+  Type: AWS::EC2::NatGateway
+  Properties:
+    AllocationId: !GetAtt NatGatewayEIPA.AllocationId
+    SubnetId: !Ref PublicSubnetA
+
+NatGatewayB:
+  Type: AWS::EC2::NatGateway
+  Properties:
+    AllocationId: !GetAtt NatGatewayEIPB.AllocationId
+    SubnetId: !Ref PublicSubnetB
+</code></pre>
+</div>
+<div><p>Our public <em>RouteTable</em> lets our public subnet route to the Internet Gateway</p>
+</div>
+<div><pre><code class="yaml">PublicRouteTable:
+  Type: AWS::EC2::RouteTable
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Public Route table
+
+DefaultPublicRoute:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    DestinationCidrBlock: 0.0.0.0/0
+    GatewayId: !Ref InternetGateway
+
+PublicSubnetARouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    SubnetId: !Ref PublicSubnetA
+
+PublicSubnetBRouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PublicRouteTable
+    SubnetId: !Ref PublicSubnetB
+</code></pre>
+</div>
+<div><p>Our private <em>Route Table</em> gives our private subnets access to the NAT gateways</p>
+</div>
+<div><h2 id="private-routes">Private Routes</h2>
+<pre><code class="yaml">PrivateRouteTableA:
+  Type: AWS::EC2::RouteTable
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Private Route Table A
+
+DefaultPrivateRouteA:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableA
+    DestinationCidrBlock: 0.0.0.0/0
+    NatGatewayId: !Ref NatGatewayA
+
+PrivateSubnetARouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableA
+    SubnetId: !Ref PrivateSubnetA
+
+PrivateRouteTableB:
+  Type: AWS::EC2::RouteTable
+  Properties:
+    VpcId: !Ref VPC
+    Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName} Private Route Table B
+
+DefaultPrivateRouteB:
+  Type: AWS::EC2::Route
+  DependsOn: InternetGatewayAttachment
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableB
+    DestinationCidrBlock: 0.0.0.0/0
+    NatGatewayId: !Ref NatGatewayB
+
+PrivateSubnetBRouteTableAssociation:
+  Type: AWS::EC2::SubnetRouteTableAssociation
+  Properties:
+    RouteTableId: !Ref PrivateRouteTableB
+    SubnetId: !Ref PrivateSubnetB
+</code></pre>
+</div>
+<div><p>Finally, lets <em>output</em> some things we&#39;ll need in other templates...</p>
+</div>
+<div><pre><code class="yaml">Outputs:
+
+  VPC:
+    Description: VPC for the Stack
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}::VPC
+
+  PublicSubnetA:
+    Description: Public Subnet A
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}::PublicSubnetA
+
+  PrivateSubnetA:
+    Description: Private Subnet A
+    Value: !Ref PrivateSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}::PrivateSubnetA
+
+  PublicSubnetB:
+    Description: Public Subnet B
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}::PublicSubnetB
+
+  PrivateSubnetB:
+    Description: Private Subnet B
+    Value: !Ref PrivateSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}::PrivateSubnetB
+</code></pre>
+</div>
+<div><p>Now, head to the console and deploy it!</p>
+</div>
+<div><p>Congratulations! You&#39;ve deployed your first VPC!</p>
+</div>
+<div><p>Coffee Break?</p>
+<p>🍺🍺🍺</p>
+</div>
+<div><p>Welcome back!</p>
+</div>
+<div><p>Let&#39;s deploy some <em>EC2 Instances</em></p>
+</div>
+<div><p>Your deployment will contain:</p>
+<ul>
+<li>Security Groups</li>
+<li>Load Balancer</li>
+<li>Auto Scaling Group</li>
+<li>Launch Configuration</li>
+</ul>
+</div>
+<div><p>What, what? No EC2 instances?!</p>
+</div>
+<div><p><img src="https://s3-ap-southeast-2.amazonaws.com/brntn-screenshots/vpc-with-asg.jpg" alt=""></p>
+</div>
+<div><p>The magic of <em>Auto Scaling Groups</em></p>
+</div>
+<div><p><img src="https://s3-ap-southeast-2.amazonaws.com/brntn-screenshots/vpc-with-ec2.jpg" alt=""></p>
+</div>
+<div><p>Cool! 😎</p>
+</div>
+<div><p>Lets set up some parameters</p>
+</div>
+<div><pre><code class="yaml">AWSTemplateFormatVersion: &quot;2010-09-09&quot;
+Description: &quot;Deploy a cluster of EC2 instances&quot;
+
+Parameters:
+
+  VpcStackName:
+    Description: The name of your VPC stack
+    Type: String
+    Default: tw-demo-vpc
+
+  KeyName:
+    Description: The name of a PEM file that is available
+    Type: AWS::EC2::KeyPair::KeyName
+</code></pre>
+</div>
+<div><p>Create a <em>Security Group</em> that lets traffic in from the internet</p>
+</div>
+<div><pre><code class="yaml">LoadBalancerSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Security group for ALB
+    VpcId:
+      Fn::ImportValue: !Sub &quot;${VpcStackName}::VPC&quot;
+    SecurityGroupIngress:
+      - IpProtocol: &quot;tcp&quot;
+        FromPort: 80
+        ToPort: 80
+        CidrIp: &#39;0.0.0.0/0&#39;
+</code></pre>
+</div>
+<div><p>Create a <em>Security Group</em> that lets in SSH traffic</p>
+</div>
+<div><pre><code class="yaml">BastionHostSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Allow SSH from Anywhere
+    VpcId:
+      Fn::ImportValue: !Sub &quot;${VpcStackName}::VPC&quot;
+    SecurityGroupIngress:
+      - IpProtocol: &quot;tcp&quot;
+        FromPort: &quot;22&quot;
+        ToPort: &quot;22&quot;
+        CidrIp: &#39;0.0.0.0/0&#39;
+</code></pre>
+</div>
+<div><p>And another <em>Security Group</em> to let in traffic from the LoadBalancer and Bastion</p>
+</div>
+<div><pre><code class="yaml">InstanceSecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Allow HTTP from Load Balancer and SSH from Bastion
+    VpcId:
+      Fn::ImportValue: !Sub &quot;${VpcStackName}::VPC&quot;
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionHostSecurityGroup
+</code></pre>
+</div>
+<div><p>Create a <em>Load Balancer</em> that listens for HTTP traffic</p>
+</div>
+<div><pre><code class="yaml">LoadBalancer:
+  Type: AWS::ElasticLoadBalancing::LoadBalancer
+  Properties:
+    CrossZone: true
+    Listeners:
+      - LoadBalancerPort: 80
+        InstancePort: 80
+        Protocol: HTTP
+    HealthCheck:
+      Target: &quot;HTTP:80/&quot;
+      HealthyThreshold: 3
+      UnhealthyThreshold: 3
+      Interval: 30
+      Timeout: 5
+    SecurityGroups:
+      - !Ref LoadBalancerSecurityGroup
+    Subnets:
+      - Fn::ImportValue: !Sub &quot;${VpcStackName}::PublicSubnetA&quot;
+      - Fn::ImportValue: !Sub &quot;${VpcStackName}::PublicSubnetB&quot;
+</code></pre>
+</div>
+<div><p>The <em>Auto Scaling Group</em> manages our EC2 instances</p>
+</div>
+<div><pre><code class="yaml">ServerGroup:
+  Type: AWS::AutoScaling::AutoScalingGroup
+  Properties:
+    LaunchConfigurationName: !Ref ServerLaunchConfiguration
+    MinSize: 2
+    MaxSize: 4
+    LoadBalancerNames:
+      - !Ref LoadBalancer
+    VPCZoneIdentifier:
+      - Fn::ImportValue: !Sub &quot;${VpcStackName}::PrivateSubnetA&quot;
+      - Fn::ImportValue: !Sub &quot;${VpcStackName}::PrivateSubnetB&quot;
+</code></pre>
+</div>
+<div><p>And the <em>Launch Configuration</em> defines how the instances start</p>
+</div>
+<div><pre><code class="yaml">ServerLaunchConfiguration:
+  Type: AWS::AutoScaling::LaunchConfiguration
+  Properties:
+    KeyName: !Ref KeyName
+    ImageId: ami-f0a06892
+    SecurityGroups:
+      - !Ref InstanceSecurityGroup
+    InstanceType: t2.micro
+    UserData:
+      Fn::Base64: !Sub |
+        #!/bin/bash -xe
+        yum update -y
+        yum update -y aws-cfn-bootstrap
+        yum install -y nginx
+        service nginx start
+        curl https://basehtml.xyz &gt; /usr/share/nginx/html/index.html
+
+        /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ServerGroup --region ${AWS::Region}
+        /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ServerGroup --region ${AWS::Region}
+</code></pre>
+</div>
+<div><p>Holey Moley!</p>
+</div>
+<div><p>Let&#39;s create an ECS Cluster</p>
+</div>
+<div><p>&quot;cloud-native&quot;</p>
+</div>
+<div><p>What is ECS?</p>
+</div>
+<div><p>Amazon EC2 Container Service</p>
+</div>
+<div><p>...</p>
+</div>
+<div><p>First, let&#39;s create our ECR Repository</p>
+</div>
+<div><pre><code class="yaml">AWSTemplateFormatVersion: &quot;2010-09-09&quot;
+Description: &quot;Set up an ECR repository&quot;
+
+Parameters:
+
+  RepositoryName:
+    Type: String
+    AllowedPattern: &quot;(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*&quot;
+    Description: The name of your repository (all letters must be lowercase letters, must start and end with a letter or number, can contain [._-/], slashes must have a letter or number on either side)
+</code></pre>
+</div>
+<div><pre><code class="yaml">Resources:
+
+  DockerRepository:
+    Type: &quot;AWS::ECR::Repository&quot;
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      RepositoryPolicyText:
+        Version: &quot;2012-10-17&quot;
+        Statement:
+          - Sid: AllowPushPull
+            Effect: Allow
+            Principal:
+              AWS: !Sub &#39;arn:aws:iam::${AWS::AccountId}:root&#39;
+            Action:
+              - &quot;ecr:GetDownloadUrlForLayer&quot;
+              - &quot;ecr:BatchGetImage&quot;
+              - &quot;ecr:BatchCheckLayerAvailability&quot;
+              - &quot;ecr:PutImage&quot;
+              - &quot;ecr:InitiateLayerUpload&quot;
+              - &quot;ecr:UploadLayerPart&quot;
+              - &quot;ecr:CompleteLayerUpload&quot;
+</code></pre>
+</div>
+<div><pre><code class="yaml">Outputs:
+
+  DockerRepositoryUrl:
+    Description: URL for the Docker repository
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${RepositoryName}
+    Export:
+      Name: !Sub ${AWS::StackName}::DockerRepositoryUrl
+</code></pre>
+</div>
+<div><p>Now let&#39;s push our sample project to ECR</p>
+</div>
+<div><p>...</p>
+</div>
+<div><p>Pushed? Cool!</p>
+</div>
+<div><p>We have lots of <em>Parameters</em> this time</p>
+</div>
+<div><pre><code class="yaml">Parameters:
+
+  VpcStackName:
+    Description: The name of your VPC stack
+    Type: String
+    Default: tw-demo-vpc
+
+  EcrStackName:
+    Description: The name of your ECR stack
+    Type: String
+    Default: tw-demo-ecr
+
+  KeyName:
+    Description: The name of a PEM file that is available
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: &quot;brntn-sydney&quot;
+
+  ServiceName:
+    Description: The name of your service
+    Type: String
+    Default: testServiceName
+
+  ClusterName:
+    Description: The name of your ECS cluster
+    Type: String
+    Default: demo-cluster
+</code></pre>
+</div>
+<div><p>Our Instance will need an <em>IAM Role</em> that gives it permissions for ECS</p>
+</div>
+<div><pre><code class="yaml">InstanceRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ec2.amazonaws.com]
+          Action: [&#39;sts:AssumeRole&#39;]
+    Path: /
+    Policies:
+      - PolicyName: &quot;ec2-ecs-instance-role&quot;
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action: [&#39;ecs:CreateCluster&#39;, &#39;ecs:DeregisterContainerInstance&#39;, &#39;ecs:DiscoverPollEndpoint&#39;,
+                        &#39;ecs:Poll&#39;, &#39;ecs:RegisterContainerInstance&#39;, &#39;ecs:StartTelemetrySession&#39;,
+                        &#39;ecs:Submit*&#39;, &#39;logs:CreateLogStream&#39;, &#39;logs:PutLogEvents&#39;, &#39;ecr:BatchGetImage&#39;,
+                        &#39;ecr:GetAuthorizationToken&#39;, &#39;ecr:BatchCheckLayerAvailability&#39;, &#39;ecr:GetDownloadUrlForLayer&#39;,
+                        &quot;logs:CreateLogGroup&quot;, &quot;logs:CreateLogStream&quot;, &quot;logs:PutLogEvents&quot;, &quot;logs:DescribeLogStreams&quot;]
+              Resource: &#39;*&#39;
+</code></pre>
+</div>
+<div><p>That Role needs a <em>IAM Profile</em> so it can be assigned to our instance</p>
+</div>
+<div><pre><code class="yaml">InstanceProfile:
+  Type: AWS::IAM::InstanceProfile
+  Properties:
+    Path: /
+    Roles:
+      - !Ref InstanceRole
+</code></pre>
+</div>
+<div><p>We need another role that gives our Docker containers (Tasks) the permissions they need</p>
+</div>
+<div><pre><code class="yaml">TaskRole:
+  Type: AWS::IAM::Role
+  Properties:
+    AssumeRolePolicyDocument:
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: [&#39;sts:AssumeRole&#39;]
+    Path: /
+    Policies:
+      - PolicyName: &quot;ecs-service-role&quot;
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Action: [&#39;elasticloadbalancing:DeregisterInstancesFromLoadBalancer&#39;, &#39;elasticloadbalancing:DeregisterTargets&#39;,
+                        &#39;elasticloadbalancing:Describe*&#39;, &#39;elasticloadbalancing:RegisterInstancesWithLoadBalancer&#39;,
+                        &#39;elasticloadbalancing:RegisterTargets&#39;, &#39;ec2:Describe*&#39;, &#39;ec2:AuthorizeSecurityGroupIngress&#39;]
+              Resource: &#39;*&#39;
+</code></pre>
+</div>
+<div><p>Cool! Let&#39;s create our Cluster.</p>
+</div>
+<div><pre><code class="yaml">EcsCluster:
+  Type: AWS::ECS::Cluster
+  Properties:
+    ClusterName: !Ref ClusterName
+</code></pre>
+</div>
+<div><p>Again with the security groups!</p>
+</div>
+<div><pre><code class="yaml">LoadBalancerSecurityGroup:
+  Type: &quot;AWS::EC2::SecurityGroup&quot;
+  Properties:
+    Tags:
+      - Key: &quot;Name&quot;
+        Value: !Ref &quot;AWS::StackName&quot;
+    GroupDescription: &quot;ECS Cluster ALB Group&quot;
+    VpcId:
+      Fn::ImportValue: !Sub &quot;${VpcStackName}::VPC&quot;
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: &#39;0.0.0.0/0&#39;
+</code></pre>
+</div>
+<div><pre><code class="yaml">ClusterInstanceSecurityGroup:
+  Type: &quot;AWS::EC2::SecurityGroup&quot;
+  Properties:
+    Tags:
+      - Key: &quot;Name&quot;
+        Value: !Ref &quot;AWS::StackName&quot;
+    GroupDescription: &quot;ECS Instance Security Group&quot;
+    VpcId:
+      Fn::ImportValue: !Sub &quot;${VpcStackName}::VPC&quot;
+    SecurityGroupIngress:
+      - IpProtocol: &quot;tcp&quot;
+        FromPort: &quot;22&quot;
+        ToPort: &quot;22&quot;
+        CidrIp: &#39;0.0.0.0/0&#39;
+      - IpProtocol: tcp
+        FromPort: &quot;80&quot;
+        ToPort: &quot;80&quot;
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 31000
+        ToPort: 65535
+        SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+</code></pre>
+</div>
+<div><pre><code class="yaml">ClusterLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      KeyName: !Ref KeyName
+      ImageId: ami-efda148d
+      SecurityGroups:
+        - !Ref ClusterInstanceSecurityGroup
+      InstanceType: t2.micro
+      IamInstanceProfile: !Ref InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum update -y aws-cfn-bootstrap
+
+          echo ECS_CLUSTER=${EcsCluster} &gt;&gt; /etc/ecs/ecs.config
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ClusterAutoScalingGroup --region ${AWS::Region}
+</code></pre>
+</div>
+<div><pre><code class="yaml">  ClusterAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      LaunchConfigurationName: !Ref ClusterLaunchConfiguration
+      MinSize: 2
+      MaxSize: 2
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub &quot;${VpcStackName}::PrivateSubnetA&quot;
+        - Fn::ImportValue: !Sub &quot;${VpcStackName}::PrivateSubnetB&quot;
+
+</code></pre>
+</div>
+<div><pre><code class="yaml">  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Ref AWS::StackName
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - Fn::ImportValue: !Sub &quot;${VpcStackName}::PublicSubnetA&quot;
+        - Fn::ImportValue: !Sub &quot;${VpcStackName}::PublicSubnetB&quot;
+</code></pre>
+</div>
+<div><pre><code class="yaml">  HttpListener:
+    Type: &quot;AWS::ElasticLoadBalancingV2::Listener&quot;
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - TargetGroupArn: !Ref LoadBalancerTargetGroup
+          Type: forward
+</code></pre>
+</div>
+<div><pre><code class="yaml">  LoadBalancerTargetGroup:
+    Type: &quot;AWS::ElasticLoadBalancingV2::TargetGroup&quot;
+    DependsOn: LoadBalancer
+    Properties:
+      Tags:
+        - Key: &quot;Name&quot;
+          Value: !Ref &quot;AWS::StackName&quot;
+      Port: 5000
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub &quot;${VpcStackName}::VPC&quot;
+</code></pre>
+</div>
+<div><pre><code class="yaml">  DockerTaskDefinition:
+    Type: &quot;AWS::ECS::TaskDefinition&quot;
+    Properties:
+      Family: &quot;docker-task&quot;
+      ContainerDefinitions:
+        - Name: &quot;docker-task&quot;
+          Image:
+            !Join
+              - &quot;:&quot;
+              - - Fn::ImportValue: !Sub &quot;${EcrStackName}::DockerRepositoryUrl&quot;
+                - &quot;latest&quot;
+          Memory: 256
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 5000
+          Essential: true
+</code></pre>
+</div>
+<div><pre><code class="yaml">  Service:
+    Type: &quot;AWS::ECS::Service&quot;
+    DependsOn:
+      - ClusterAutoScalingGroup
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref EcsCluster
+      DesiredCount: 2
+      TaskDefinition: !Ref DockerTaskDefinition
+
+      Role: !Ref TaskRole
+      LoadBalancers:
+        - ContainerName: &quot;docker-task&quot;
+          ContainerPort: 5000
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+</code></pre>
+</div>
+<div><pre><code class="yaml">Outputs:
+
+  EcrLoadBalancerHostedZoneId:
+    Description: &quot;Hosted Zone Id for ALB&quot;
+    Value: !GetAtt LoadBalancer.CanonicalHostedZoneID
+    Export:
+      Name: !Sub ${AWS::StackName}::LoadBalancerHostedZoneId
+
+  EcrLoadBalancerDNSName:
+    Description: &quot;Hosted Zone Id for ALB&quot;
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub ${AWS::StackName}::LoadBalancerDNSName
+</code></pre>
+</div>
+</body>
+</html>
