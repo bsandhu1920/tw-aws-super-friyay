@@ -700,7 +700,7 @@ ServerLaunchConfiguration:
 
 ---
 
-Holey Moley!
+Holey Moley! 🏌️🏌️‍♀️
 
 ---
 
