@@ -800,7 +800,23 @@ Now let's push our sample project to ECR
 
 ---
 
-...
+If you have an image/project ready, you can use that. Otherwise, here's a hello world node app that you can clone
+
+https://github.com/kksy/docker-express-boilerplate
+
+---
+
+```bash
+# build the project
+# docker build -t docker-express .
+> make build
+# tag image (docker-express) to be pushed to the repository (express-demo) you've created
+> docker tag docker-express:latest awsaccountid.dkr.ecr.ap-southeast-2.amazonaws.com/express-demo:latest
+# login to ecr
+> eval $(aws ecr get-login --no-include-email --region ap-southeast-2)
+# push image
+> docker push awsaccountid.dkr.ecr.ap-southeast-2.amazonaws.com/express-demo
+```
 
 ---
 
