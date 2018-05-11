@@ -749,7 +749,7 @@ Parameters:
   RepositoryName:
     Type: String
     AllowedPattern: "(?:[a-z0-9]+(?:[._-][a-z0-9]+)*/)*[a-z0-9]+(?:[._-][a-z0-9]+)*"
-    Description: The name of your repository (all letters must be lowercase letters, must start and end with a letter or number, can contain [._-/], slashes must have a letter or number on either side)
+    Description: The name of your repository
 ```
 
 ---
@@ -820,7 +820,7 @@ https://github.com/kksy/docker-express-boilerplate
 
 ---
 
-Pushed? Cool!
+Pushed? Cool! 👍👍🏻👍🏼👍🏽👍🏾👍🏿
 
 ---
 
